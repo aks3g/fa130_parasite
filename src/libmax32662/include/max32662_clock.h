@@ -107,6 +107,28 @@ typedef enum
 	Max32662_peripheral_pt      = (1 << 29),
 } Max32662_gcr_peripheral;
 
+typedef enum
+{
+	Max32662_reset_dma          = (1 << 0),
+	Max32662_reset_wdt          = (1 << 1),
+	Max32662_reset_gpio0        = (1 << 2),
+	Max32662_reset_tmr0         = (1 << 4),
+	Max32662_reset_tmr1         = (1 << 6),
+	Max32662_reset_tmr2         = (1 << 7),
+	Max32662_reset_uart0        = (1 << 11),
+	Max32662_reset_uart1        = (1 << 12),
+	Max32662_reset_spi0         = (1 << 13),
+	Max32662_reset_spi1         = (1 << 14),
+	Max32662_reset_i2c0         = (1 << 16),
+	Max32662_reset_can          = (1 << 19),
+	Max32662_reset_trng         = (1 << 24),
+	Max32662_reset_adc          = (1 << 26),
+	Max32662_reset_soft         = (1 << 29),
+	Max32662_reset_perih        = (1 << 20),
+	Max32662_reset_sys          = (1 << 31),
+} Max32662_gcr_reset;
+
+
 #define MAX32662_IBRO_CLK_HZ 7372800
 
 extern int max32662_clock_setup_internal_ibro(void);
@@ -115,6 +137,7 @@ extern int max32662_clock_setup_sysclock(Max32662_gcr_sysclk_sel sel, Max32662_g
 extern int max32662_clock_enter_sleep(void);
 extern int max32662_clock_exit_sleep(void);
 extern int max32662_clock_peripheral(Max32662_gcr_peripheral peri, uint32_t enable);
+extern int max32662_clock_reset(Max32662_gcr_reset peri);
 
 
 #endif

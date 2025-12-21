@@ -101,8 +101,9 @@ typedef struct
 	uint32_t rsvd_0x0020;
 	uint32_t rsvd_0x0024;
 	uint32_t rsvd_0x0028;
+	uint32_t rsvd_0x002C;
 
-	// +0x002C
+	// +0x0030
 	union {
 		uint32_t dword;
 		struct {
@@ -111,8 +112,7 @@ typedef struct
 		} bf;
 	} restart;
 
-	// +0x0030 - 0x0038
-	uint32_t rsvd_0x0030;
+	// +0x0034 - 0x0038
 	uint32_t rsvd_0x0034;
 	uint32_t rsvd_0x0038;
 
@@ -326,8 +326,9 @@ typedef void (*Max32662_adc_conv_done_callback)(Max32662_adc_result *result, siz
 #define MAX32662_ADC			((volatile Max32662_adc *)0x40034000)
 
 int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_vref vref);
-int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size);
+int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size, int continuous);
 int max32662_adc_start_conversion(Max32662_adc_result *result, size_t size, Max32662_adc_conv_done_callback cb);
+int max32662_adc_start_continuous(Max32662_adc_result *result, size_t n_ch, uint32_t conv_hz, Max32662_adc_conv_done_callback cb);
 
 
 #endif//_MAX32662_ADC_H_

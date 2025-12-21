@@ -130,6 +130,7 @@ extern int max32662_gpio_setup_pullmode(Max32662_gpio_pin pin, Max32662_gpio_pul
 extern int max32662_gpio_setup_inout(Max32662_gpio_pin pin, Max32662_gpio_inout inout);
 extern int max32662_gpio_input(Max32662_gpio_pin pin, uint32_t *input);
 extern int max32662_gpio_outout(Max32662_gpio_pin pin, uint32_t output);
+extern int max32662_gpio_outout_toggle(Max32662_gpio_pin pin);
 extern int max32662_gpio_setup_interrupt(Max32662_gpio_pin pin, Max32662_gpio_intr_mode mode, Max32662_gpio_intr_callback cb);
 extern int max32662_gpio_enable_interrupt(int enable);
 #endif//_MAX32662_GPIO_H_

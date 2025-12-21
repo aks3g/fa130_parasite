@@ -24,6 +24,8 @@ SRC_C += max32662_gpio.c
 SRC_C += max32662_i2c.c
 SRC_C += max32662_timer.c
 SRC_C += max32662_uart.c
+SRC_C += max32662_spi.c
+SRC_C += max32662_dmac.c
 
 #SRC_C_TEST = $(SRC_C) max32662_libtest.c syscall.c startup.c sla_header.c systick.c
 SRC_C_TEST = $(SRC_C) max32662_libtest.c syscall.c startup.c systick.c
@@ -46,7 +48,7 @@ CFLAGS = -x c $(INCLUDE) -Wall -Werror -std=c99 -nostdlib $(CFLAGS_CORTEX_M4) $(
 AFLAGS =      $(INCLUDE) -Wall                            $(AFLAGS_CORTEX_M4)
 LDFLAGS = -mthumb -Wl,-Map=$(BUILD)/$@.map  -Wl,--start-group -lm  -Wl,--end-group -Wl,--gc-sections -mcpu=cortex-m4 -T $(LDFILE)
 
-all: $(TEST_ELF) $(LIBNAME)
+all: $(BUILD) $(TEST_ELF) $(LIBNAME)
 lib: $(BUILD) $(LIBNAME)
 test: $(BUILD) $(TEST_ELF)
 

@@ -26,13 +26,11 @@ int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_v
 
 	// Setup Clock
 	MAX32662_ADC->clkctrl.bf.clksel = Max32662_adc_clksel_sys_osc;	// 100MHz
-	MAX32662_ADC->clkctrl.bf.clkdiv = Max32662_adc_clkdiv_by_16;	// div by 16
+	MAX32662_ADC->clkctrl.bf.clkdiv = Max32662_adc_clkdiv_by_4;		// SAR_CLK = 25MHz
 
-//	MAX32662_ADC->sampclkctrl.bf.track_cnt = 10; // min=4
-//	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 10; // min=0
-
-	MAX32662_ADC->sampclkctrl.bf.track_cnt = 0x10; // min=4
-	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 0x100; // min=0
+	//J 変換時間を25kHzに設定
+	MAX32662_ADC->sampclkctrl.bf.track_cnt =  16;  // min=4
+	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 964;  // 25ksps
 
 	MAX32662_ADC->intfl.dword = 0xffffffff;
 	
@@ -65,13 +63,13 @@ int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_v
 	return 0;
 }
 
-int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size)
+int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size, int continuous)
 {
 	size_t i = 0;
 	// 10.12.2.1
 	MAX32662_ADC->ctrl1.bf.trig_mode = 0; // soft trigger
-	MAX32662_ADC->ctrl1.bf.cnv_mode  = 0; // single shot
-	
+	MAX32662_ADC->ctrl1.bf.cnv_mode  = continuous;
+
 	// Slot setup
 	MAX32662_ADC->ctrl1.bf.num_slots = arr_size-1;
 	MAX32662_ADC->chsel0.bf.slot0_id = ch_arr[i++];
@@ -106,9 +104,7 @@ int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size)
 	// Clear Interrupt flags
 	MAX32662_ADC->intfl.dword = 0xffffffff;
 
-	// Setup interrupt
-	MAX32662_ADC->inten.bf.seq_done = 1;
-//	MAX32662_ADC->inten.bf.fifo_lvl = 1;
+	MAX32662_ADC->inten.dword = 0;
 
 	__enable_nvic_irq(MAX32662_IRQNUM_ADC);
 
@@ -116,19 +112,45 @@ int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size)
 }
 
 
-int max32662_adc_start_conversion(Max32662_adc_result *result, size_t size, Max32662_adc_conv_done_callback cb)
+int max32662_adc_start_conversion(Max32662_adc_result *result, size_t n_ch, Max32662_adc_conv_done_callback cb)
 {
 	s_result  = result;
-	s_size    = size;
+	s_size    = n_ch;
 	s_cb_func = cb;
 
-//	MAX32662_ADC->fifodmactrl.bf.thresh = size - 1;
-
 	MAX32662_ADC->intfl.dword = 0xffffffff;
+	MAX32662_ADC->inten.bf.seq_done = 1;
+
 	MAX32662_ADC->ctrl1.bf.start  = 1;
 
 	return 0;
 }
+
+int max32662_adc_start_continuous(Max32662_adc_result *result, size_t n_ch, uint32_t conv_hz, Max32662_adc_conv_done_callback cb)
+{
+	s_result  = result;
+	s_size    = n_ch;
+	s_cb_func = cb;
+
+	//J Sequence間の間隔を調整する
+	//J interval を micro-secで表現
+	uint32_t interval_us = 1000000 / conv_hz; 
+
+	//J 25ksps に設定しているので，channel数を使って1sequenceにかかる時間[us]を計算する
+	uint32_t seq_time_us = n_ch * (1000000 / 25000);
+
+	//J 100/4 MHzで考えたときの待ち時間を変換時間単位でをRestart Delay Counterに入れる
+	volatile uint32_t delay_us = interval_us - seq_time_us;
+	MAX32662_ADC->restart.dword = (delay_us * 25 / 1000); //@25KHz
+
+	MAX32662_ADC->intfl.dword = 0xffffffff;
+	MAX32662_ADC->inten.bf.seq_done = 1;
+
+	MAX32662_ADC->ctrl1.bf.start  = 1;
+
+	return 0;
+}
+
 
 void adc_handler(void)
 {
@@ -142,9 +164,13 @@ void adc_handler(void)
 		if (s_cb_func != NULL) {
 			s_cb_func(s_result, s_size);
 		}
-		MAX32662_ADC->ctrl1.bf.start = 0;
+		//J Clear start bit if single conversion mode
+		if (MAX32662_ADC->ctrl1.bf.cnv_mode == 0) {
+			MAX32662_ADC->ctrl1.bf.start = 0;
+		}
 	}
-	
+
+
 	MAX32662_ADC->intfl.dword = flg;
 }
 

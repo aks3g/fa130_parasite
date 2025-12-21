@@ -17,6 +17,8 @@ int max32662_gpio_altfunc(Max32662_gpio_pin pin, uint32_t alt, int transition)
 {
 	if(alt > 5) return -1;
 
+	MAX32662_GPIO->gpion_inen     |= (1<<(int)pin);
+
 	switch (alt)
 	{
 	case 0://GPIO
@@ -126,6 +128,18 @@ int  max32662_gpio_outout(Max32662_gpio_pin pin, uint32_t output)
 	}
 	else {
 		MAX32662_GPIO->gpion_out_clr = (1<<(int)pin);
+	}
+
+	return 0;
+}
+
+int max32662_gpio_outout_toggle(Max32662_gpio_pin pin)
+{
+	if (MAX32662_GPIO->gpion_out & (1<<(int)pin)) {
+		MAX32662_GPIO->gpion_out_clr = (1<<(int)pin);
+	}
+	else {
+		MAX32662_GPIO->gpion_out_set = (1<<(int)pin);
 	}
 
 	return 0;

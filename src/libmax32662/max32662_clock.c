@@ -57,3 +57,8 @@ int max32662_clock_peripheral(Max32662_gcr_peripheral peri, uint32_t enable)
 	return 0;
 }
 
+int max32662_clock_reset(Max32662_gcr_reset peri)
+{
+	MAX32662_GCR->gcr_rst0 = (uint32_t)peri;
+	return 0;
+}

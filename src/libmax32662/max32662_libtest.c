@@ -8,16 +8,15 @@
 #include "max32662_adc.h"
 #include "max32662_i2c.h"
 #include "max32662_uart.h"
+#include "max32662_spi.h"
+#include "max32662_dmac.h"
 
-volatile uint32_t work = 0;
 volatile uint32_t idx = 0;
-uint32_t arr_ai0[2048] = {0};
-uint32_t arr_ai1[2048] = {0};
-uint32_t arr_ai2[2048] = {0};
-uint32_t arr_ai3[2048] = {0};
+uint32_t arr_ai0[4096] = {0};
+uint32_t arr_ai1[4096] = {0};
+uint32_t arr_ai2[4096] = {0};
+uint32_t arr_ai3[4096] = {0};
 
-uint32_t _state = 0;
-uint8_t  _duty = 0;
 void _switch_cb(Max32662_gpio_pin pin)
 {
 	return;
@@ -27,6 +26,8 @@ static Max32662_adc_result _result[4];
 
 void _adc_cb(Max32662_adc_result *result, size_t size)
 {
+	max32662_gpio_outout_toggle(Max32662_gpio_14);
+
 	if (idx >= (sizeof(arr_ai0)/sizeof(arr_ai0[0])) ) {
 		return;
 	}
@@ -37,7 +38,6 @@ void _adc_cb(Max32662_adc_result *result, size_t size)
 	if (size > 3) arr_ai3[idx] = result[3].dword;
 
 	idx++;
-	work = 0;
 
 	return;
 }
@@ -45,14 +45,7 @@ void _adc_cb(Max32662_adc_result *result, size_t size)
 
 void _timer0_cb(int id)
 {
-	if (idx >= (sizeof(arr_ai0)/sizeof(arr_ai0[0])) ) {
-		return;
-	}
-
-	if (work) return;
-	work = 1;
-	max32662_gpio_outout(Max32662_gpio_14, 0);
-	max32662_adc_start_conversion(_result, sizeof(_result)/sizeof(_result[0]), _adc_cb);
+//	max32662_gpio_outout_toggle(Max32662_gpio_14);
 }
 
 #define AI_MINI4WD_PIN_CTRL1		Max32662_gpio_4
@@ -102,6 +95,19 @@ static void _set_slottle(int slottle)
 	}
 }
 
+static volatile int dma_done = 0;
+static void _dmac_cb(int status)
+{
+	dma_done = 1;
+}
+
+
+static uint8_t tx[1] = {0x9F};
+static uint8_t rx[10] = {0};
+
+static uint32_t src_buf[32] = {0xaa};
+static uint32_t dst_buf[32] = {0x00};
+
 int main(void)
 {
 	systick_init(1, 100000000);
@@ -119,12 +125,15 @@ int main(void)
 	max32662_clock_peripheral(Max32662_peripheral_tmr2, 1);
 	max32662_clock_peripheral(Max32662_peripheral_adc,  1);
 	max32662_clock_peripheral(Max32662_peripheral_i2c1, 1);
+	max32662_clock_peripheral(Max32662_peripheral_spi0, 1);
+	max32662_clock_peripheral(Max32662_peripheral_spi1, 1);
+	max32662_clock_peripheral(Max32662_peripheral_dma, 1);
 
 	// Test LED Output.
 	max32662_gpio_setup_inout(Max32662_gpio_2, Max32662_gpio_output);
 	max32662_gpio_outout(Max32662_gpio_2, 1);
-//	max32662_gpio_setup_inout(Max32662_gpio_14, Max32662_gpio_output);
-//	max32662_gpio_outout(Max32662_gpio_14, 1);
+	max32662_gpio_setup_inout(Max32662_gpio_14, Max32662_gpio_output);
+	max32662_gpio_outout(Max32662_gpio_14, 1);
 
 	// Motor Control
 	max32662_gpio_setup_inout(Max32662_gpio_4, Max32662_gpio_output);
@@ -162,6 +171,52 @@ int main(void)
 	max32662_i2c_initialize(max32662_i2c1, 100000, 50000000, 0, 0);
 #endif
 
+	__enable_irq();
+
+	max32662_dmac_initialize();
+
+	Max32662_dmac_cfg_src_to_dma_fifo src;
+	Max32662_dmac_cfg_dst_from_dma_fifo dst;
+	{
+		src.src = src_buf;
+		src.burst_size = 1;
+		src.srcwd = sizeof(uint32_t);;
+		src.cnt = sizeof(src_buf) / sizeof(uint32_t);
+		src.srcinc = 1;
+
+		dst.dst = dst_buf;
+		dst.burst_size = 1;
+		dst.dstwd = sizeof(uint32_t);
+		dst.dstinc = 1;
+
+		max32662_dmac_setup(Max32662_dmac_ch0, Max32662_dmac_req_mem_to_mem, &src, &dst);
+		max32662_dmac_start_transfer(Max32662_dmac_ch0, _dmac_cb);
+	}
+
+	while(1);
+
+	max32662_gpio_altfunc(Max32662_gpio_7,  1, 1);
+	max32662_gpio_altfunc(Max32662_gpio_8,  1, 1);
+	max32662_gpio_altfunc(Max32662_gpio_17, 1, 1);
+	max32662_gpio_altfunc(Max32662_gpio_18, 1, 1);
+
+	max32662_gpio_setup_inout(Max32662_gpio_7,  Max32662_gpio_input);
+	max32662_gpio_setup_inout(Max32662_gpio_8,  Max32662_gpio_output);
+	max32662_gpio_setup_inout(Max32662_gpio_17, Max32662_gpio_output);
+	max32662_gpio_setup_inout(Max32662_gpio_18, Max32662_gpio_output);
+
+	max32662_gpio_altfunc(Max32662_gpio_7,  1, 0);
+	max32662_gpio_altfunc(Max32662_gpio_8,  1, 0);
+	max32662_gpio_altfunc(Max32662_gpio_17, 1, 0);
+	max32662_gpio_altfunc(Max32662_gpio_18, 1, 0);
+
+
+	max32662_clock_reset(Max32662_reset_spi1);
+	max32662_spi_master_initialize(max32662_spi1, max32662_spi_mode0, 25, 50);
+	max32662_spi_master_transfer(max32662_spi1, tx, rx, sizeof(tx), 4);
+
+	while(1);
+
 	// Test ADC
 	Max32662_adc_ch ch_arr[] = {
 		Max32662_adc_ch_ain0,
@@ -182,7 +237,8 @@ int main(void)
 	max32662_gpio_altfunc(Max32662_gpio_13, 4, 0);
 
 	max32661_adc_init(Max32662_adc_amp_enabled, Max32662_adc_div_3, Max32662_adc_ref_2_048v);
-	max32662_adc_setup_conversion(ch_arr, 4);
+	max32662_adc_setup_conversion(ch_arr, sizeof(ch_arr)/sizeof(ch_arr[0]), 1);
+	max32662_adc_start_continuous(_result, 4, 4000, _adc_cb);
 
 	// UART
 /*
@@ -191,19 +247,21 @@ int main(void)
 	max32662_uart_setup(Max32662_uart0, 115200);
 */
 	// Test Tiemr & PWM
-	max32662_timer_initialize(max32662_timer_0, 50000000, 1000000/2048, _timer0_cb);
-	max32662_timer_enable_interrupt(max32662_timer_0, 1);
+//	max32662_timer_initialize(max32662_timer_0, 50000000, 1000000/2048, _timer0_cb);
+//	max32662_timer_initialize(max32662_timer_0, 50000000, 1000000/(4096*2), _timer0_cb);
+//	max32662_timer_enable_interrupt(max32662_timer_0, 1);
 
-	max32662_timer_initialize_as_pwm(max32662_timer_1, 50000000, 2048);
-	max32662_timer_initialize_as_pwm(max32662_timer_2, 50000000, 2048);
+	max32662_timer_initialize_as_pwm(max32662_timer_1, 50000000, 2000);
+	max32662_timer_initialize_as_pwm(max32662_timer_2, 50000000, 2000);
 	max32662_timer_pwm_set_duty(max32662_timer_1, 0);
 	max32662_timer_pwm_set_duty(max32662_timer_2, 0);
 
 	__enable_irq();
 
-	while(1) {
-		_set_slottle(100);
+	systick_delay(99);
 
+	while(1) {
+		_set_slottle(80);
 
 		max32662_gpio_outout(Max32662_gpio_2, 0);
 		systick_delay(100);
