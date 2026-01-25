@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <string.h>
 
 #include "cortex_m4.h"
 
@@ -95,15 +96,32 @@ static void _set_slottle(int slottle)
 	}
 }
 
+static volatile int _spi_transaction_done = 0;
+static void _spi_cb(int status)
+{
+	_spi_transaction_done = 1;
+
+	return;
+}
+
 static volatile int dma_done = 0;
 static void _dmac_cb(int status)
 {
 	dma_done = 1;
 }
 
+#define SPI_FLASH_STATUS_REG_WIP			(1<<0)
+#define SPI_FLASH_STATUS_REG_WEL			(1<<1)
+#define SPI_FLASH_STATUS_REG_BP0			(1<<2)
+#define SPI_FLASH_STATUS_REG_BP1			(1<<3)
+#define SPI_FLASH_STATUS_REG_BP2			(1<<4)
+#define SPI_FLASH_STATUS_REG_BP3			(1<<5)
+#define SPI_FLASH_STATUS_REG_QE				(1<<6)
+#define SPI_FLASH_STATUS_REG_SRWD			(1<<7)
 
-static uint8_t tx[1] = {0x9F};
-static uint8_t rx[10] = {0};
+
+static uint8_t tx[512] = {0x9F};
+static uint8_t rx[512] = {0};
 
 static uint32_t src_buf[32] = {0xaa};
 static uint32_t dst_buf[32] = {0x00};
@@ -173,6 +191,69 @@ int main(void)
 
 	__enable_irq();
 
+	max32662_gpio_altfunc(Max32662_gpio_7,  1, 1);
+	max32662_gpio_altfunc(Max32662_gpio_8,  1, 1);
+	max32662_gpio_altfunc(Max32662_gpio_17, 1, 1);
+	max32662_gpio_altfunc(Max32662_gpio_18, 1, 1);
+
+	max32662_gpio_setup_inout(Max32662_gpio_7,  Max32662_gpio_input);
+	max32662_gpio_setup_inout(Max32662_gpio_8,  Max32662_gpio_output);
+	max32662_gpio_setup_inout(Max32662_gpio_17, Max32662_gpio_output);
+	max32662_gpio_setup_inout(Max32662_gpio_18, Max32662_gpio_output);
+
+	max32662_gpio_altfunc(Max32662_gpio_7,  1, 0);
+	max32662_gpio_altfunc(Max32662_gpio_8,  1, 0);
+	max32662_gpio_altfunc(Max32662_gpio_17, 1, 0);
+	max32662_gpio_altfunc(Max32662_gpio_18, 1, 0);
+
+	// Check Chipid
+	max32662_clock_reset(Max32662_reset_spi1);
+	max32662_spi_master_initialize(max32662_spi1, max32662_spi_mode0, 25, 50);
+
+	// Check Chipid
+	tx[0] = 0x9f;
+	max32662_spi_master_transfer(max32662_spi1, tx, rx, 1, 4, NULL);
+
+	// Write Enable
+	tx[0] = 0x06;
+	max32662_spi_master_transfer(max32662_spi1, tx, rx, 1, 0, NULL);
+
+	// poll status register
+//	tx[0] = 0x05;
+//	max32662_spi_master_transfer(max32662_spi1, tx, rx, 1, 1, NULL);
+
+//	if (0 == (rx[1] & SPI_FLASH_STATUS_REG_WEL)) while (1);
+
+	// Page Program
+	tx[0] = 0x02;
+	tx[1] = 0x00;
+	tx[2] = 0x00;
+	tx[3] = 0x00;
+
+	for (size_t i=0 ; i<256 ; ++i) {
+		tx[4+i] = i;
+	}
+//	max32662_spi_master_transfer(max32662_spi1, tx, rx, 256+4, 0, NULL);
+	_spi_transaction_done = 0;
+	max32662_spi_master_transferDMA(max32662_spi1, tx, rx, 256+4, _spi_cb);
+
+	while(!_spi_transaction_done);
+
+	tx[0] = 0x05;
+	do {
+		max32662_spi_master_transfer(max32662_spi1, tx, rx, 1, 1, NULL);
+	}
+	while (rx[1] & SPI_FLASH_STATUS_REG_WIP);
+
+	tx[0] = 0x03;
+	tx[1] = 0x00;
+	tx[2] = 0x00;
+	tx[3] = 0x00;
+	memset (rx, 0xaa, sizeof(rx));
+	max32662_spi_master_transfer(max32662_spi1, tx, rx, 4, 256, NULL);
+
+	while(1);
+
 	max32662_dmac_initialize();
 
 	Max32662_dmac_cfg_src_to_dma_fifo src;
@@ -192,28 +273,6 @@ int main(void)
 		max32662_dmac_setup(Max32662_dmac_ch0, Max32662_dmac_req_mem_to_mem, &src, &dst);
 		max32662_dmac_start_transfer(Max32662_dmac_ch0, _dmac_cb);
 	}
-
-	while(1);
-
-	max32662_gpio_altfunc(Max32662_gpio_7,  1, 1);
-	max32662_gpio_altfunc(Max32662_gpio_8,  1, 1);
-	max32662_gpio_altfunc(Max32662_gpio_17, 1, 1);
-	max32662_gpio_altfunc(Max32662_gpio_18, 1, 1);
-
-	max32662_gpio_setup_inout(Max32662_gpio_7,  Max32662_gpio_input);
-	max32662_gpio_setup_inout(Max32662_gpio_8,  Max32662_gpio_output);
-	max32662_gpio_setup_inout(Max32662_gpio_17, Max32662_gpio_output);
-	max32662_gpio_setup_inout(Max32662_gpio_18, Max32662_gpio_output);
-
-	max32662_gpio_altfunc(Max32662_gpio_7,  1, 0);
-	max32662_gpio_altfunc(Max32662_gpio_8,  1, 0);
-	max32662_gpio_altfunc(Max32662_gpio_17, 1, 0);
-	max32662_gpio_altfunc(Max32662_gpio_18, 1, 0);
-
-
-	max32662_clock_reset(Max32662_reset_spi1);
-	max32662_spi_master_initialize(max32662_spi1, max32662_spi_mode0, 25, 50);
-	max32662_spi_master_transfer(max32662_spi1, tx, rx, sizeof(tx), 4);
 
 	while(1);
 

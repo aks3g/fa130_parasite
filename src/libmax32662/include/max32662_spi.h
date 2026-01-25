@@ -202,12 +202,15 @@ typedef enum
 } max32662_spi_mode;
 
 
+typedef void (*Max32662_spi_callback)(int status);
+
 
 #define MAX32662_SPI0		((volatile Max32662_reg_spi *)0x40046000)
 #define MAX32662_SPI1		((volatile Max32662_reg_spi *)0x40047000)
 
 
 extern int max32662_spi_master_initialize(max32662_spi_id id, max32662_spi_mode mode, uint32_t sck_MHz, uint32_t peripheral_clk_MHz);
-extern int max32662_spi_master_transfer(max32662_spi_id id,  uint8_t *txbuf, uint8_t *rxbuf, size_t tx_size, size_t rx_size);
+extern int max32662_spi_master_transfer(max32662_spi_id id,  uint8_t *txbuf, uint8_t *rxbuf, size_t tx_size, size_t rx_size, Max32662_spi_callback cb);
+extern int max32662_spi_master_transferDMA(max32662_spi_id id,  uint8_t *txbuf, uint8_t *rxbuf, size_t size, Max32662_spi_callback cb);
 
 #endif//_MAX32662_SPI_H_

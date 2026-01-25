@@ -14,7 +14,7 @@ static Max32662_dmac_transfer_done_callback s_callbacks[Max32662_dmac_ch_MAX] = 
 
 static int _to_errcode(uint32_t flg)
 {
-	if ((flg & (1<<1)) == 0) return MAX32662_DMAC_CODE_UNKNWON;
+//	if ((flg & (1<<1)) == 0) return MAX32662_DMAC_CODE_UNKNWON;
 
 	if (flg & (1<<2))		return MAX32662_DMAC_CODE_CTZ;
 	else if (flg & (1<<3))	return MAX32662_DMAC_CODE_RLD;

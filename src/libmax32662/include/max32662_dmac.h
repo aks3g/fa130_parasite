@@ -92,7 +92,6 @@ typedef struct
 			uint32_t ren					: 1;
 		} bf;
 	} cntrld;
-
 } Max32662_reg_dmac_channel;
 
 typedef struct 
