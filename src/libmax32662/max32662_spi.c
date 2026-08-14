@@ -54,7 +54,10 @@ static void _set_flag_and_callback(max32662_spi_id id, uint32_t flag)
 	if (_dma_flags[id] == ((1<<2) | (1<<1) | (1<<0)) ) {
 		_cb[id](0);
 
-		flag = 0;
+		_cb[id] = NULL;
+		_dma_flags[id] = 0;
+
+		// Disable DMA
 		volatile Max32662_reg_spi *spi = _selectSpi(id);
 		spi->dma.bf.dma_rx_en = 0;
 		spi->dma.bf.dma_tx_en = 0;
@@ -138,7 +141,7 @@ int max32662_spi_master_initialize(max32662_spi_id id, max32662_spi_mode mode, u
 	spi->ctrl2.bf.three_wire = 0;             // 4wire mode.
 	spi->ctrl2.bf.numbits = 8;                // 8bits
 
-	uint32_t clk_cnt = peripheral_clk_MHz / sck_MHz;
+	uint32_t clk_cnt =  sck_MHz / peripheral_clk_MHz;
 	if (clk_cnt < 2) return -1;
 
 	// setup ss timing
@@ -146,16 +149,10 @@ int max32662_spi_master_initialize(max32662_spi_id id, max32662_spi_mode mode, u
 	spi->sstime.bf.post  = clk_cnt;
 	spi->sstime.bf.inact = clk_cnt;
 
-	spi->sstime.bf.pre   = 1;
-	spi->sstime.bf.post  = 1;
-	spi->sstime.bf.inact = 1;
-
 	// clock setting
-	spi->clkctrl.bf.clkdiv = 4;
-//	spi->clkctrl.bf.lo = clk_cnt / 2;
-//	spi->clkctrl.bf.hi = clk_cnt - spi->clkctrl.bf.lo;
-	spi->clkctrl.bf.lo = 15;
-	spi->clkctrl.bf.hi = 15;
+	spi->clkctrl.bf.clkdiv = 0;
+	spi->clkctrl.bf.lo = clk_cnt / 2;
+	spi->clkctrl.bf.hi = clk_cnt - spi->clkctrl.bf.lo;
 
 	spi->ctrl0.bf.ss_io = 0;
 	spi->ctrl0.bf.ss_active = 1; // Use SS target 0.
@@ -176,11 +173,15 @@ int max32662_spi_master_transfer(max32662_spi_id id,  uint8_t *txbuf, uint8_t *r
 		spi->inten.bf.mst_done = 1;
 		_cb[id] = cb;
 	}
-
+	else {
+		spi->inten.bf.mst_done = 0;
+		_cb[id] = NULL;
+	}
 
 	size_t total = tx_size + rx_size;
 	size_t p_tx = 0;
 	size_t p_rx = 0;
+	size_t skip_rx = tx_size;
 
 	spi->ctrl0.bf.en = 0;
 
@@ -195,14 +196,13 @@ int max32662_spi_master_transfer(max32662_spi_id id,  uint8_t *txbuf, uint8_t *r
 	spi->ctrl1.bf.tx_num_char = total;
 	spi->dma.bf.tx_fifo_en = 1;
 
-	spi->dma.bf.tx_flush = 1;
-	spi->dma.bf.rx_flush = 1;
-
 	spi->dma.bf.tx_thd_val = 1;
 	spi->dma.bf.rx_thd_val = 1;
 
-	spi->ctrl0.bf.en = 1;
+	spi->dma.bf.tx_flush = 1;
+	spi->dma.bf.rx_flush = 1;
 
+	spi->ctrl0.bf.en = 1;
 
 	// Setup tx data
 	size_t init_len = tx_size > 32 ? 32 : tx_size;
@@ -215,14 +215,21 @@ int max32662_spi_master_transfer(max32662_spi_id id,  uint8_t *txbuf, uint8_t *r
 	spi->ctrl0.bf.start = 1;
 
 	// Tx/Rx がTotal Byteを超えるまで動かす
-	while ((p_rx < total) || (p_tx < total)) {
+	while (p_tx < total) {
 		while ((p_tx < total) && (spi->dma.bf.tx_lvl < 31)) {
 			spi->fifo.byte = (p_tx < tx_size) ? txbuf[p_tx] : 0xff;
 			p_tx++;
 		}
 
-		while ((p_rx < total) && (spi->dma.bf.rx_lvl != 0)) {
-			rxbuf[p_rx++] = spi->fifo.byte;
+		while ((p_rx < rx_size) && (spi->dma.bf.rx_lvl != 0)) {
+			if (skip_rx) {
+				skip_rx--;
+				volatile uint8_t dispose = spi->fifo.byte;
+				(void)dispose;
+			}
+			else {
+				rxbuf[p_rx++] = spi->fifo.byte;
+			}
 		}
 	}
 
@@ -265,7 +272,7 @@ int max32662_spi_master_transferDMA(max32662_spi_id id,  uint8_t *txbuf, uint8_t
 	spi->ctrl0.bf.en = 1;
 
 	// PUSH to TX fifo.
-	for (size_t i=0 ; i<32 ; ++i) {
+	for (size_t i=0 ; i< (size>32 ? 32 : size) ; ++i) {
 		spi->fifo.byte = txbuf[i];
 	}
 
@@ -288,10 +295,10 @@ int max32662_spi_master_transferDMA(max32662_spi_id id,  uint8_t *txbuf, uint8_t
 	// 先頭の32ByteはFIFOに積んでる
 	Max32662_dmac_cfg_src_to_dma_fifo mem2spi_src;
 	{
-		mem2spi_src.src        = &(txbuf[32]);
+		mem2spi_src.src        = size>32 ? &(txbuf[32]) : txbuf;
 		mem2spi_src.burst_size = 1;
 		mem2spi_src.srcwd      = sizeof(uint8_t);
-		mem2spi_src.cnt        = size - 32;
+		mem2spi_src.cnt        = size>32 ? (size - 32) : 0;
 		mem2spi_src.srcinc     = 1;
 	}
 	Max32662_dmac_cfg_dst_from_dma_fifo mem2spi_dst;

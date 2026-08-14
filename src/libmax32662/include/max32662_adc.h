@@ -11,6 +11,25 @@
 
 #include "max32662.h"
 
+
+typedef union {
+	uint32_t dword;
+	struct {
+		uint32_t ready		: 1;
+		uint32_t rsvd1		: 1;
+		uint32_t abort		: 1;
+		uint32_t start_det	: 1;
+		uint32_t seq_started	: 1;
+		uint32_t seq_done	: 1;
+		uint32_t conv_done	: 1;
+		uint32_t clipped	: 1;
+		uint32_t fifo_lvl	: 1;
+		uint32_t fifo_full	: 1;
+		uint32_t fifo_ofl	: 1;
+		uint32_t rsvd11_31	: 21;
+	} bf;
+} max32662_adc_intflg;
+
 typedef struct
 {
 	// +0x0000
@@ -136,7 +155,8 @@ typedef struct
 	union {
 		uint32_t dword;
 		struct {
-			uint32_t data		: 16;
+			uint32_t data		: 12;
+			uint32_t rsvd12_15  : 4;
 			uint32_t chan		: 5;
 			uint32_t rsvd21_23	: 3;
 			uint32_t invalid	: 1;
@@ -170,42 +190,10 @@ typedef struct
 
 
 	// +0x0050
-	union {
-		uint32_t dword;
-		struct {
-			uint32_t ready		: 1;
-			uint32_t rsvd1		: 1;
-			uint32_t abort		: 1;
-			uint32_t start_det	: 1;
-			uint32_t seq_started	: 1;
-			uint32_t seq_done	: 1;
-			uint32_t conv_done	: 1;
-			uint32_t clipped	: 1;
-			uint32_t fifo_lvl	: 1;
-			uint32_t fifo_full	: 1;
-			uint32_t fifo_ofl	: 1;
-			uint32_t rsvd11_31	: 21;
-		} bf;
-	} inten;
+	max32662_adc_intflg inten;
 
 	// +0x0054
-	union {
-		uint32_t dword;
-		struct {
-			uint32_t ready		: 1;
-			uint32_t rsvd1		: 1;
-			uint32_t abort		: 1;
-			uint32_t start_det	: 1;
-			uint32_t seq_started	: 1;
-			uint32_t seq_done	: 1;
-			uint32_t conv_done	: 1;
-			uint32_t clipped	: 1;
-			uint32_t fifo_lvl	: 1;
-			uint32_t fifo_full	: 1;
-			uint32_t fifo_ofl	: 1;
-			uint32_t rsvd11_31	: 21;
-		} bf;
-	} intfl;
+	max32662_adc_intflg intfl;
 
 	// +0x0058-0x005C
 	uint32_t rsvd0x0058;
@@ -320,15 +308,28 @@ typedef enum
 } Max32662_adc_amp;
 
 
+typedef enum 
+{
+	Max32662_adc_trig_tmr0_output = 0,
+	Max32662_adc_trig_tmr1_output = 1,
+	Max32662_adc_trig_tmr2_output = 2,
+
+	Max32662_adc_trig_trig_d = 4,
+	Max32662_adc_trig_trig_e = 5,
+	Max32662_adc_trig_trig_c = 6,
+
+	Max32662_adc_trig_soft = 8,
+}Max32662_adc_trig;
+
 typedef void (*Max32662_adc_conv_done_callback)(Max32662_adc_result *result, size_t size);
 
 
 #define MAX32662_ADC			((volatile Max32662_adc *)0x40034000)
 
 int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_vref vref);
-int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size, int continuous);
+int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size, Max32662_adc_trig trig, int continuous);
 int max32662_adc_start_conversion(Max32662_adc_result *result, size_t size, Max32662_adc_conv_done_callback cb);
 int max32662_adc_start_continuous(Max32662_adc_result *result, size_t n_ch, uint32_t conv_hz, Max32662_adc_conv_done_callback cb);
-
+void max32662_adc_handler(void);
 
 #endif//_MAX32662_ADC_H_

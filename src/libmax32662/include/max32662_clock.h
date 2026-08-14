@@ -7,8 +7,6 @@
 #ifndef _MAX32662_CLOCK_H_
 #define _MAX32662_CLOCK_H_
 
-#include <stdint.h>
-
 #pragma pack(1)
 typedef struct 
 {

@@ -175,7 +175,14 @@ typedef void (*max32662_timer_callback)(int timer_id);
 extern int max32662_timer_initialize(max32662_timer_id id, uint32_t peripheral_clk_Hz, uint32_t interval_us, max32662_timer_callback cb);
 extern int max32662_timer_enable_interrupt(max32662_timer_id id, int enable);
 
-extern int max32662_timer_initialize_as_pwm(max32662_timer_id id, uint32_t peripheral_clk_Hz, uint32_t pwm_freq_Hz);
+extern int max32662_timer_initialize_as_pwm(max32662_timer_id id, uint32_t peripheral_clk_Hz, uint32_t pwm_freq_Hz, max32662_timer_callback cb);
 extern int max32662_timer_pwm_set_duty(max32662_timer_id id, uint8_t duty);
+extern int max32662_timer_pwm_set_pol(max32662_timer_id id, uint8_t pol);
+
+extern int max32662_timer_initalize_freerun(max32662_timer_id id, uint32_t peripheral_clk_Hz, max32662_tmr_ctrl0_clkdiv prescal);
+extern uint32_t max32662_timer_gettick(max32662_timer_id id);
+
+extern int max32662_timer_initialize_oneshot(max32662_timer_id id, uint32_t peripheral_clk_Hz, uint32_t time_us, max32662_timer_callback cb);
+extern int max32662_timer_enable_oneshot(max32662_timer_id id);
 
 #endif//_MAX32662_TIMER_H_

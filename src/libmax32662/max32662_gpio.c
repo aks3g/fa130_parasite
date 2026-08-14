@@ -106,9 +106,13 @@ int max32662_gpio_setup_inout(Max32662_gpio_pin pin, Max32662_gpio_inout inout)
 		MAX32662_GPIO->gpion_outen_set = (1<<(int)pin);
 		MAX32662_GPIO->gpion_inen     &=~(1<<(int)pin);
 	}
-	else {
+	else if (inout == Max32662_gpio_input) {
 		MAX32662_GPIO->gpion_outen_clr = (1<<(int)pin);
 		MAX32662_GPIO->gpion_inen     |= (1<<(int)pin);
+	}
+	else {
+		MAX32662_GPIO->gpion_outen_clr = (1<<(int)pin);
+		MAX32662_GPIO->gpion_inen     &=~(1<<(int)pin);
 	}
 
 	return 0;

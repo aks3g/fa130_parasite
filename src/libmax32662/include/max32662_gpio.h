@@ -6,8 +6,6 @@
 #ifndef _MAX32662_GPIO_H_
 #define _MAX32662_GPIO_H_
 
-#include <stdint.h>
-
 #pragma pack(1)
 typedef struct 
 {
@@ -109,6 +107,7 @@ typedef enum
 {
 	Max32662_gpio_input,
 	Max32662_gpio_output,
+	Max32662_gpio_disconnect,
 } Max32662_gpio_inout;
 
 typedef enum

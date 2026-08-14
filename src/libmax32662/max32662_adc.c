@@ -26,11 +26,18 @@ int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_v
 
 	// Setup Clock
 	MAX32662_ADC->clkctrl.bf.clksel = Max32662_adc_clksel_sys_osc;	// 100MHz
-	MAX32662_ADC->clkctrl.bf.clkdiv = Max32662_adc_clkdiv_by_4;		// SAR_CLK = 25MHz
+
 
 	//J •ÏŠ·ŽžŠÔ‚ð25kHz‚ÉÝ’è
-	MAX32662_ADC->sampclkctrl.bf.track_cnt =  16;  // min=4
-	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 964;  // 25ksps
+#if 0
+	MAX32662_ADC->clkctrl.bf.clkdiv = Max32662_adc_clkdiv_by_4;		// SAR_CLK = 25MHz
+	MAX32662_ADC->sampclkctrl.bf.track_cnt =  10;  // min=4
+	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 958;  // 25ksps
+else
+	MAX32662_ADC->clkctrl.bf.clkdiv = Max32662_adc_clkdiv_by_16;	// SAR_CLK = 6.25MHz
+	MAX32662_ADC->sampclkctrl.bf.track_cnt = 60;
+	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 0;
+#endif
 
 	MAX32662_ADC->intfl.dword = 0xffffffff;
 	
@@ -40,18 +47,21 @@ int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_v
 
 	// 10.3 Analog Input Buffer Path
 	// Enable all analog input
-	MAX32662_MCR->adccfg1.bf.thu_pad_sw_en = 0xf;
-	MAX32662_MCR->adccfg1.bf.ain_inp_en    = 0xf;
+//	MAX32662_MCR->adccfg1.bf.ain_inp_en    = 0xf;
+	MAX32662_MCR->adccfg1.bf.ain_inp_en    = 0x2;
 	MAX32662_MCR->adccfg1.bf.div_sel       = div;
 
 	if (amp == Max32662_adc_amp_enabled) {
+		MAX32662_MCR->adccfg1.bf.thu_pad_sw_en = 0xf;
 		MAX32662_MCR->adccfg1.bf.thru_en     = 0x1;
 		MAX32662_MCR->adccfg1.bf.amp_en      = 0x1; // Amp enable
 		MAX32662_MCR->adccfg1.bf.amp_rri_en  = 0x1; // Rail to Rail Amp
 	}
 	else {
+		MAX32662_MCR->adccfg1.bf.thu_pad_sw_en = 0;
 		MAX32662_MCR->adccfg1.bf.thru_en     = 0;
 		MAX32662_MCR->adccfg1.bf.amp_en      = 0; // Amp disable
+		MAX32662_MCR->adccfg1.bf.amp_rri_en  = 0;
 	}
 
 	// Enable and wait for ready
@@ -63,11 +73,17 @@ int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_v
 	return 0;
 }
 
-int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size, int continuous)
+int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size, Max32662_adc_trig trig, int continuous)
 {
 	size_t i = 0;
 	// 10.12.2.1
-	MAX32662_ADC->ctrl1.bf.trig_mode = 0; // soft trigger
+	if (trig == Max32662_adc_trig_soft) {
+		MAX32662_ADC->ctrl1.bf.trig_mode = 0;
+	}
+	else {
+		MAX32662_ADC->ctrl1.bf.trig_mode = 1;
+		MAX32662_ADC->ctrl1.bf.trig_sel  = (trig & 0x7);
+	}
 	MAX32662_ADC->ctrl1.bf.cnv_mode  = continuous;
 
 	// Slot setup
@@ -99,7 +115,7 @@ int max32662_adc_setup_conversion(Max32662_adc_ch *ch_arr, size_t arr_size, int 
 	MAX32662_ADC->ctrl1.bf.avg  = 0;
 
 	// Format enabled
-	MAX32662_ADC->fifodmactrl.bf.data_format = 0;
+	MAX32662_ADC->fifodmactrl.bf.data_format = 1;
 
 	// Clear Interrupt flags
 	MAX32662_ADC->intfl.dword = 0xffffffff;
@@ -120,6 +136,7 @@ int max32662_adc_start_conversion(Max32662_adc_result *result, size_t n_ch, Max3
 
 	MAX32662_ADC->intfl.dword = 0xffffffff;
 	MAX32662_ADC->inten.bf.seq_done = 1;
+	MAX32662_ADC->inten.bf.conv_done = 1;
 
 	MAX32662_ADC->ctrl1.bf.start  = 1;
 
@@ -152,25 +169,32 @@ int max32662_adc_start_continuous(Max32662_adc_result *result, size_t n_ch, uint
 }
 
 
-void adc_handler(void)
+void max32662_adc_handler(void)
 {
-	uint32_t flg = MAX32662_ADC->intfl.dword;
+	max32662_adc_intflg flg = MAX32662_ADC->intfl;
 
 	// Read from fifo
-	if (MAX32662_ADC->intfl.bf.seq_done) {
+	if (flg.bf.seq_done) {
 		for (size_t i=0 ; i<s_size ; ++i) {
 			s_result[i].dword = MAX32662_ADC->data.dword;
 		}
 		if (s_cb_func != NULL) {
 			s_cb_func(s_result, s_size);
 		}
+	}
+
+	MAX32662_ADC->intfl.dword = flg.dword;
+
+	if (flg.bf.conv_done) {
 		//J Clear start bit if single conversion mode
 		if (MAX32662_ADC->ctrl1.bf.cnv_mode == 0) {
 			MAX32662_ADC->ctrl1.bf.start = 0;
 		}
+
+		// Re-arm next trigger
+		if (MAX32662_ADC->ctrl1.bf.trig_mode == 1) {
+			MAX32662_ADC->ctrl1.bf.start = 1;
+		}
 	}
-
-
-	MAX32662_ADC->intfl.dword = flg;
 }
 

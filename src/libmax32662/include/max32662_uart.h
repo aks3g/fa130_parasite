@@ -6,8 +6,21 @@
 #ifndef _MAX32662_UART_H_
 #define _MAX32662_UART_H_
 
-#include <stdint.h>
-#include <stddef.h>
+
+
+typedef union {
+	uint32_t dword;
+	struct {
+		uint32_t rx_ferr    : 1;
+		uint32_t rx_par     : 1;
+		uint32_t cts_ev     : 1;
+		uint32_t rx_ov      : 1;
+		uint32_t rx_thd     : 1;
+		uint32_t tx_ae      : 1;
+		uint32_t tx_he      : 1;
+		uint32_t rsvd7_31   : 25;
+	} bf;
+} max32662_uart_intfl;
 
 typedef struct {
 	// +0x0000
@@ -69,19 +82,7 @@ typedef struct {
 	} inten;
 
 	// +0x000C
-	union {
-		uint32_t dword;
-		struct {
-			uint32_t rx_ferr    : 1;
-			uint32_t rx_par     : 1;
-			uint32_t cts_ev     : 1;
-			uint32_t rx_ov      : 1;
-			uint32_t rx_thd     : 1;
-			uint32_t tx_ae      : 1;
-			uint32_t tx_he      : 1;
-			uint32_t rsvd7_31   : 25;
-		} bf;
-	} intfl;
+	max32662_uart_intfl intfl;
 
 	// +0x0010
 	union {
@@ -199,11 +200,15 @@ typedef enum
 } Max32662_uart_over_sampling;
 
 
-typedef void (*Max32662_uart_tx_done_func)(void);
 typedef void (*Max32662_uart_rx_done_func)(uint8_t c);
 
 int max32662_uart_setup(Max32662_uart_id id, uint32_t baudrate);
-int max32662_uart_enable_intr(Max32662_uart_id id, Max32662_uart_tx_done_func tx_cb, Max32662_uart_rx_done_func rx_cb);
-int max32662_uart_tx(Max32662_uart_id id, uint8_t c);
+int max32662_uart_register_cb(Max32662_uart_id id, Max32662_uart_rx_done_func rx_cb);
+int max32662_uart_tx(Max32662_uart_id id, uint8_t *buf, size_t len);
+int max32662_uart_tx_b(Max32662_uart_id id, uint8_t *buf, size_t len);
+int max32662_uart_rx(Max32662_uart_id id, uint8_t *buf, size_t len, size_t *rxlen);
+size_t max32662_uart_tx_check_buf(Max32662_uart_id id);
+
+int max32662_uart_isr(Max32662_uart_id id);
 
 #endif//_MAX32662_UART_H_

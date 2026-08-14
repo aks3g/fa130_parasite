@@ -41,14 +41,14 @@ vpath %.c ../build
 # Build option
 #-------------------------------------------------
 COPT = -g -Og
-CFLAGS_CORTEX_M4 = -mthumb -mcpu=cortex-m4 -mtune=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=softfp
-AFLAGS_CORTEX_M4 = -mthumb -mcpu=cortex-m4                  -mfpu=fpv4-sp-d16 -mfloat-abi=softfp
+CFLAGS_CORTEX_M4 = -mthumb -mcpu=cortex-m4 -mtune=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+AFLAGS_CORTEX_M4 = -mthumb -mcpu=cortex-m4                  -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 
 CFLAGS = -x c $(INCLUDE) -Wall -Werror -std=c99 -nostdlib $(CFLAGS_CORTEX_M4) $(COPT)
 AFLAGS =      $(INCLUDE) -Wall                            $(AFLAGS_CORTEX_M4)
-LDFLAGS = -mthumb -Wl,-Map=$(BUILD)/$@.map  -Wl,--start-group -lm  -Wl,--end-group -Wl,--gc-sections -mcpu=cortex-m4 -T $(LDFILE)
+LDFLAGS = -mthumb -Wl,-Map=$(BUILD)/$@.map  -Wl,--start-group -lm  -Wl,--end-group -Wl,--gc-sections -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -T $(LDFILE)
 
-all: $(BUILD) $(TEST_ELF) $(LIBNAME)
+all: $(BUILD) $(LIBNAME)$(TEST_ELF)
 lib: $(BUILD) $(LIBNAME)
 test: $(BUILD) $(TEST_ELF)
 
@@ -58,6 +58,8 @@ $(BUILD):
 $(LIBNAME): $(OBJ)
 	echo "LINK $@"
 	$(AR) $(ARFLAGS_LIB)-r $(BUILD)/$@ $^
+	cp include/* ../include
+	cp build/$(LIBNAME) ../lib
 
 $(TEST_ELF): $(OBJ_TEST)
 	echo "ARCHIVE $@"
