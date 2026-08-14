@@ -1,0 +1,77 @@
+=====================================================================
+                          stm32wb15-nucleo依存部
+=====================================================================
+
+(1) 対応しているターゲットシステムの種類・構成
+
+stm32wb55_nucleo依存部は，STM社STM32WB15 nucleoをサポート
+している．搭載しているチップはnucleoはSTM32WB15CCである．
+
+
+(2) 使用する開発環境と動作検証した条件（バージョン，オプション等）
+
+コンパイラはGCCを用いる．動作確認に用いたコンパイラは以下の通りである．
+
+  gcc version 10.2.1(GCC ARM:2020-q4-major)
+
+(3) ターゲット定義事項の規定
+
+(3-1) 割込み優先度
+
+CFG_INTで使用可能な割込み優先度の範囲は，-16 〜 -1 である．ARM-Mプロセ
+ッサ依存部のマニュアルあるように，TMIN_INTPRIに設定可能な値の最大値は
+-15であり，カーネル管理内の割込みは-15 〜 -1 の優先度を設定可能であり，
+カーネル管理外の割込みの優先度としては-16が使用可能である．
+
+(4) メモリマップ
+
+プログラムはFLASHへデータはRAMへ配置する．配置を変更するには，
+stm32wbxx_ram.ld/stm32wbxx_rom.ld を変更すること．
+
+(5) シリアルインタフェースドライバの情報
+
+シリアルインタフェースドライバでは，USART1とLPUART1を用いる．
+通信フォーマットは，115200bps, 8bit, non-parity, 1stopbitである．
+
+(6) システムログ機能の情報
+
+システムログの低レベル出力は，UART1を用いる．通信フォーマットは，
+115200bps, 8bit, non-parity, 1stopbitである．
+
+(7) システムクロックの変更設定
+コンパイルスイッチMSI_RANGEの設定でシステムクロックの設定を
+変更できる．
+MSI_RANGE=0で、32000000Hz(HSEを使用)
+MSI_RANGE=6で、64000000Hz
+
+(8) ディレクトリ構成・ファイル構成
+ ./stm32wb15nucleo_gcc 
+   ./Makefile.target
+   ./stm32wbxx_ram.ld
+   ./stm32wbxx_rom.ld
+   ./target.tf
+   ./target_asm.inc
+   ./target_cfg1_out.h
+   ./target_check.tf
+   ./target_config.h
+   ./target_inithook.c
+   ./target_kernel.h
+   ./target_offset.tf
+   ./target_rename.def
+   ./target_rename.h
+   ./target_serial.cfg
+   ./target_serial.h
+   ./target_sil.h
+   ./target_stddef.h
+   ./target_syssvc.h
+   ./target_syssvc.c
+   ./target_test.h
+   ./target_timer.cfg
+   ./target_timer.h
+   ./target_unrename.h
+   ./target_user.txt
+
+(9) バージョン履歴
+2021/01/11
+・最初のリリース
+以上．
