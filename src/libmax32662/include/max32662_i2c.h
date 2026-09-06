@@ -325,8 +325,12 @@ typedef enum
 #define MAX32662_I2C0		((volatile Max32662_reg_i2c *)0x4001D000)
 #define MAX32662_I2C1		((volatile Max32662_reg_i2c *)0x4001E000)
 
+#define MAX32662_I2C_ERROR_NAK							(0x80200001)
+
+
+typedef void (*max32662_i2c_transfer_done)(int status);
 
 extern int max32662_i2c_initialize(max32662_i2c_id id, uint32_t scl_clk_Hz, uint32_t peripheral_clk_Hz, uint32_t tx_fifo_size, uint32_t rx_fifo_size);
-extern int max32662_i2c_transfer(max32662_i2c_id id, uint8_t addr,  uint8_t *txbuf, size_t txsize, uint8_t *rxbuf, size_t rxsize);
+extern int max32662_i2c_transfer(max32662_i2c_id id, uint8_t addr,  uint8_t *txbuf, size_t txsize, uint8_t *rxbuf, size_t rxsize, max32662_i2c_transfer_done cb);
 
 #endif//_MAX32662_I2C_H_
