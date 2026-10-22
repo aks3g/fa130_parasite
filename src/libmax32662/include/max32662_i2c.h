@@ -10,6 +10,44 @@
 #include <stddef.h>
 
 
+typedef union {
+	uint32_t dword;
+	struct {
+		uint32_t done				: 1;
+		uint32_t irxm				: 1;
+		uint32_t gc_addr_match		: 1;
+		uint32_t addr_match			: 1;
+		uint32_t rx_thd				: 1;
+		uint32_t tx_thd				: 1;
+		uint32_t stop				: 1;
+		uint32_t addr_ack			: 1;
+		uint32_t arb_err			: 1;
+		uint32_t to_err				: 1;
+		uint32_t addr_nack_err		: 1;
+		uint32_t data_err			: 1;
+		uint32_t dnr_err			: 1;
+		uint32_t start_err			: 1;
+		uint32_t stop_err			: 1;
+		uint32_t tx_lockout			: 1;
+		uint32_t mami				: 4;
+		uint32_t rsvd20_21			: 2;
+		uint32_t rd_addr_match		: 1;
+		uint32_t wr_addr_match		: 1;
+		uint32_t rsvd24_31			: 8;
+	} bf;
+} max32662_i2c_intfl0;
+
+typedef union {
+	uint32_t dword;
+	struct {
+		uint32_t rx_ov				: 1;
+		uint32_t tx_un				: 1;
+		uint32_t start				: 1;
+		uint32_t rsvd3_31			:29;
+	} bf;
+} max32662_i2c_intfl1;
+
+
 typedef struct 
 {
 	// +0x0000
@@ -51,32 +89,7 @@ typedef struct
 	} status;
 
 	// +0x0008
-	union {
-		uint32_t dword;
-		struct {
-			uint32_t done				: 1;
-			uint32_t irxm				: 1;
-			uint32_t gc_addr_match		: 1;
-			uint32_t addr_match			: 1;
-			uint32_t rx_thd				: 1;
-			uint32_t tx_thd				: 1;
-			uint32_t stop				: 1;
-			uint32_t addr_ack			: 1;
-			uint32_t arb_err			: 1;
-			uint32_t to_err				: 1;
-			uint32_t addr_nack_err		: 1;
-			uint32_t data_err			: 1;
-			uint32_t dnr_err			: 1;
-			uint32_t start_err			: 1;
-			uint32_t stop_err			: 1;
-			uint32_t tx_lockout			: 1;
-			uint32_t mami				: 4;
-			uint32_t rsvd20_21			: 2;
-			uint32_t rd_addr_match		: 1;
-			uint32_t wr_addr_match		: 1;
-			uint32_t rsvd24_31			: 8;
-		} bf;
-	} intfl0;
+	max32662_i2c_intfl0 intfl0;
 
 	// +0x000C
 	union {
@@ -107,15 +120,7 @@ typedef struct
 	} inten0;
 
 	// +0x0010
-	union {
-		uint32_t dword;
-		struct {
-			uint32_t rx_ov				: 1;
-			uint32_t tx_un				: 1;
-			uint32_t start				: 1;
-			uint32_t rsvd3_31			:29;
-		} bf;
-	} intfl1;
+	max32662_i2c_intfl1 intfl1;
 
 	// +0x0014
 	union {

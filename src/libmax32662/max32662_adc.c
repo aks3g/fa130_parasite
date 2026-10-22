@@ -28,15 +28,16 @@ int max32661_adc_init(Max32662_adc_amp amp, Max32662_adc_div div, MAX32662_adc_v
 	MAX32662_ADC->clkctrl.bf.clksel = Max32662_adc_clksel_sys_osc;	// 100MHz
 
 
-	//J 変換時間を25kHzに設定
 #if 0
+	//J 変換時間を25kHzに設定
 	MAX32662_ADC->clkctrl.bf.clkdiv = Max32662_adc_clkdiv_by_4;		// SAR_CLK = 25MHz
 	MAX32662_ADC->sampclkctrl.bf.track_cnt =  10;  // min=4
 	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 958;  // 25ksps
-else
+#else
+	//J 変換時間を1kHzに設定
 	MAX32662_ADC->clkctrl.bf.clkdiv = Max32662_adc_clkdiv_by_16;	// SAR_CLK = 6.25MHz
-	MAX32662_ADC->sampclkctrl.bf.track_cnt = 60;
-	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 0;
+	MAX32662_ADC->sampclkctrl.bf.track_cnt = 4;
+	MAX32662_ADC->sampclkctrl.bf.idle_cnt  = 6225;
 #endif
 
 	MAX32662_ADC->intfl.dword = 0xffffffff;
@@ -47,8 +48,7 @@ else
 
 	// 10.3 Analog Input Buffer Path
 	// Enable all analog input
-//	MAX32662_MCR->adccfg1.bf.ain_inp_en    = 0xf;
-	MAX32662_MCR->adccfg1.bf.ain_inp_en    = 0x2;
+	MAX32662_MCR->adccfg1.bf.ain_inp_en    = 0xf;
 	MAX32662_MCR->adccfg1.bf.div_sel       = div;
 
 	if (amp == Max32662_adc_amp_enabled) {
@@ -153,8 +153,8 @@ int max32662_adc_start_continuous(Max32662_adc_result *result, size_t n_ch, uint
 	//J interval を micro-secで表現
 	uint32_t interval_us = 1000000 / conv_hz; 
 
-	//J 25ksps に設定しているので，channel数を使って1sequenceにかかる時間[us]を計算する
-	uint32_t seq_time_us = n_ch * (1000000 / 25000);
+	//J 1ksps に設定しているので，channel数を使って1sequenceにかかる時間[us]を計算する
+	uint32_t seq_time_us = n_ch * (1000000 / 1000);
 
 	//J 100/4 MHzで考えたときの待ち時間を変換時間単位でをRestart Delay Counterに入れる
 	volatile uint32_t delay_us = interval_us - seq_time_us;
