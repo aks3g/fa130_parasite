@@ -41,10 +41,12 @@ void isr_tmr3(intptr_t exinf)
 	(void)exinf;
 }
 
+#if 0
 void isr_i2c0(intptr_t exinf)
 {
 	(void)exinf;
 }
+#endif
 
 void isr_uart0(intptr_t exinf)
 {
@@ -119,10 +121,12 @@ void isr_dac3(intptr_t exinf)
 }
 #endif
 
+#if 0
 void isr_i2c1(intptr_t exinf)
 {
 	(void)exinf;
 }
+#endif
 
 void isr_gpiowake(intptr_t exinf)
 {

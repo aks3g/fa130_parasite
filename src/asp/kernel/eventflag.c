@@ -236,7 +236,7 @@ iset_flg(ID flgid, FLGPTN setptn)
 	ER		ercd;
 
 	LOG_ISET_FLG_ENTER(flgid, setptn);
-	CHECK_INTCTX_UNL();
+//	CHECK_INTCTX_UNL();
 	CHECK_FLGID(flgid);
 	p_flgcb = get_flgcb(flgid);
 
