@@ -31,6 +31,7 @@ extern void consoleFuncSignalProc(char **argv, size_t argc);
 extern void consoleFuncFs(char **argv, size_t argc);
 extern void consoleFuncEnv(char **argv, size_t argc);
 extern void consoleFuncSaveEnv(char **argv, size_t argc);
+extern void consoleFuncSensor(char **argv, int argc);
 
 extern void consoleHelpHelp(void);
 extern void consoleHelpCapture(void);
@@ -39,6 +40,7 @@ extern void consoleHelpPid(void);
 extern void consoleHelpSignalProc(void);
 extern void consoleHelpFs(void);
 extern void consoleHelpEnv(void);
+extern void consoleHelpSensor(void);
 
 
 extern void consoleCmdExec(char *line);

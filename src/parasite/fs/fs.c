@@ -89,8 +89,39 @@ int fs_read(FsFile *f, uint8_t *buf, const size_t size)
 	int ret = 0;
 	if (f == NULL) return E_FS_NULL;
 
+	size_t remaining = size;
+
 	wai_sem(FS_SEM);
 
+	//J 今の作業領域に乗っている部分はコピーしてしまう
+	if ( ((size_t)f->ptr & (SFLASH_PAGE_SIZE - 1)) != 0) {
+		size_t fragment = SFLASH_PAGE_SIZE - (size_t)f->ptr & (SFLASH_PAGE_SIZE - 1);
+		size_t copy_size = framgnet > remaining ? remaining : fragment;
+		if (copy_size) {
+			memcpy(buf, &f->work[4+(size_t)f->ptr & (SFLASH_PAGE_SIZE - 1)], copy_size);
+			remaining -= copy_size;
+			f->ptr += copy_size;
+			buf += copy_size;
+		}
+	}
+	if (remaining == 0) goto FINALLY;
+
+	uint32_t addr = (f->begin_page + (f->ptr / SFLASH_PAGE_SIZE)) * SFLASH_PAGE_SIZE;
+	while (remaining) {
+		ret=sflash_read_page(addr, f->work);
+		if (ret != 0) goto FINALLY;
+
+		uint32_t copy_size = remaining > SFLASH_PAGE_SIZE ? SFLASH_PAGE_SIZE : remaining;
+		memcpy(buf, &f->work[4], copy_size);
+
+		addr += SFLASH_PAGE_SIZE;
+		remaining -= copy_size;
+		f->ptr += copy_size;
+		buf += copy_size;
+	}
+
+
+FINALLY:
 	sig_sem(FS_SEM);
 
 	return ret;

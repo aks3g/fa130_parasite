@@ -11,6 +11,11 @@
 #include "app/console.h"
 #include "app/ad_collector.h"
 
+#ifndef ADC_BUF_LEN
+#define ADC_BUF_LEN 8
+#endif
+
+
 void signalProc_dump(uint16_t *buf, size_t count)
 {
 	for (size_t i=0 ; i<count ; ++i) {

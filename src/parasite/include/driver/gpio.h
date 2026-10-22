@@ -6,6 +6,8 @@
 #ifndef _GPIO_PORTMAP_H_
 #define _GPIO_PORTMAP_H_
 
+#include "max32662_gpio.h" 
+
 // for Debugger
 #define PARASITE_PIN_EXT_COM_DET	Max32662_gpio_14
 #define PARASITE_PIN_DBG_UART_TX	Max32662_gpio_2

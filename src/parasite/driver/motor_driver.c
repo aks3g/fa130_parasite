@@ -6,6 +6,9 @@
 #include <kernel.h>
 #include "kernel_cfg.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "max32662_gpio.h"
 #include "max32662_timer.h"
 #include "max32662_adc.h"
@@ -42,7 +45,7 @@ typedef struct
 } DeltaBuf;
 
 static DeltaBuf delta_buf = {0, MEDIAN_SIZE_MASK, {0}};
-static compare_uint32(const void *a, const void *b)
+static int compare_uint32(const void *a, const void *b)
 {
     uint32_t aa = *(const uint32_t *)a;
     uint32_t bb = *(const uint32_t *)b;
@@ -98,6 +101,12 @@ uint32_t driver_md_get_tick(void)
 {
 	return prv;
 }
+
+int16_t driver_md_get_rpm(void)
+{
+	return (int16_t)(60.0f * 1.0f / DRIVER_TIMER_TICK_TO_SEC(delta));
+}
+
 
 float driver_md_get_rps(void)
 {
@@ -203,7 +212,7 @@ int driver_md_init(void)
 	driver_md_set_slottle(0);
 
 	// Setup Tachometer
-	max32662_gpio_setup_interrupt(PARASITE_PIN_MD_FB, Max32662_gpio_intr_edge_falling, _tachometer_cb);
+	max32662_gpio_setup_interrupt(PARASITE_PIN_SENS_INT, Max32662_gpio_intr_edge_falling, _tachometer_cb);
 
 	return 0;
 }

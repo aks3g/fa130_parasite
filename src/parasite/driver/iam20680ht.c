@@ -10,8 +10,12 @@
 
 #include <string.h>
 
-#include "max32662_gpio.h"
-#include "max32662_i2c.h"
+//#include "max32662_gpio.h"
+//#include "max32662_i2c.h"
+
+#include "driver/gpio.h"
+#include "driver/i2c.h"
+#include "iam20680ht.h"
 
 #define IAM20680_ADR								(0x68)
 
@@ -125,43 +129,46 @@ static void _capture_done_cb(int status);
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-static volatile uint8_t sAccelReady = 0;
-static volatile uint8_t sGyroReady  = 0;
 static volatile uint8_t sInhibit = 0;
+static Iam20680ht_data sRxBuf;
+static Iam20680ht_grab_cb _cb = NULL;
 
-
-static AiMini4wdImuRawData sRxBuf;
-static uint8_t sTxbuf[1];
-
-
+#include "app/console.h"
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-int iam20680ht_probe(void)
+int iam20680ht_probe(Iam20680ht_grab_cb callback)
 {
 	uint8_t txbuf[2];
 	uint8_t rxbuf[1];
 	int ret = 0;
 	volatile int wait = 0;
 
+	// Setup Interrupt Pin
+	max32662_gpio_setup_interrupt(PARASITE_PIN_SENS_INT, Max32662_gpio_intr_edge_rising, iam20680ht_on_int);
+	_cb = callback;
+
 	// initialzie clock
 #if 1
 	txbuf[0] = IAM20680HT_PWR_MGMT_1;
 	txbuf[1] = 0x81;
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
+		return __LINE__;
 		return ret;
 	}
 	do {
 		wait = 120000;
 		while(wait--);
-		ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
-	}while(ret == AI_ERROR_I2C_NACK || (rxbuf[0] & 0x80) != 0);
+		ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+	} while(ret == DRIVER_I2C_ERROR_NAK || (rxbuf[0] & 0x80) != 0);
 #endif
+
+	//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// read Who am i Register
 	txbuf[0] = IAM20680HT_WHO_AM_I;
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
 	if (ret != 0) {
 		return ret;
 	}
@@ -169,160 +176,140 @@ int iam20680ht_probe(void)
 //		return AI_ERROR_NODEV;
 	}
 
+	//console_printf("%d %02x\n", __LINE__, rxbuf[0]); _debug_set(__LINE__);
 
 	// Setup Sensor rate = 50Hz
 	txbuf[0] = IAM20680HT_SMPLRT_DIV;
 	txbuf[1] = (1000 / 50) - 1;
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+	//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+	//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// Config
 	txbuf[0] = IAM20680HT_CONFIG;
 	txbuf[1] = (2 << IAM20680_CONFIG_DLPF_CFG_POS);
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// Gyro Config
 	txbuf[0] = IAM20680HT_GYRO_CONFIG;
 	txbuf[1] = (IAM20680HT_GYRO_FS_2000DSP << IAM20680HT_GYRO_FS_SEL_POS) | (0 << IAM20680HT_GYRO_FCHOICE_POS);
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// Low Power Mode
 	txbuf[0] = IAM20680HT_LP_MODE_CFG;
 	txbuf[1] = (5 << IAM20680HT_LP_MODE_CFG_G_AVGCFG_POS);
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// Accel Config 1
 	txbuf[0] = IAM20680HT_ACCEL_CONFIG;
 	txbuf[1] = (IAM20680HT_ACCEL_FS_16G << IAM20680HT_ACCEL_FS_SEL_POS) | (2 << IAM20680HT_ACCEL_A_DLPF_CFG_POS);
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// Accel Config 2
 	txbuf[0] = IAM20680HT_ACCEL_CONFIG2;
 	txbuf[1] = (2<<IAM20680HT_ACCEL_A_DLPF_CFG_POS) | (IAM20680HT_ACCEL_AVERAGE_8SAMPLES << IAM20680HT_ACCEL_FS_SEL_POS);
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// Interrupt config
 	txbuf[0] = IAM20680HT_INT_PIN_CFG;
 	txbuf[1] = (1<<IAM20680HT_INT_CFG_INT_LEVEL_POS) | (0<<IAM20680HT_INT_CFG_LATCH_INT_EN_POS) | (1<<IAM20680HT_INT_CFG_INT_RD_CLEAR_POS);
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
 
 	// Interrupt Enable
 	txbuf[0] = IAM20680HT_INT_ENABLE;
 	txbuf[1] = (1<<IAM20680HT_INT_ENABLE_DATA_RDY_INT_EN_POS);
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 2, NULL, 0, NULL);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 2, NULL, 0);
 	if (ret != 0) {
 		return ret;
 	}
-	ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, txbuf, 1, rxbuf, 1, NULL);
-	
-	
-//	samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, sTxbuf, 1, sRxBuf.bytes, 14, NULL);
-	
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+	ret = driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, rxbuf, 1);
+		//console_printf("%d\n", __LINE__); _debug_set(__LINE__);
+
+//	driver_i2c_transfer_blocking(IAM20680_ADR, sTxbuf, 1, sRxbuf, 14);
+
 	// Check Interrupt pin
 //	while(0 == samd51_gpio_input(SAMD51_GPIO_A19));
 	return ret;
 }
 
+
 /*---------------------------------------------------------------------------*/
-int iam20680ht_grab_oneshot(void)
+int iam20680ht_grab_oneshot(Iam20680ht_data *rxbuf)
 {
-	sTxbuf[0] = IAM20680HT_ACCEL_XOUT_H;
-	return samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, sTxbuf, 1, sRxBuf.bytes, 1, NULL);
+	uint8_t txbuf[1] = {IAM20680HT_ACCEL_XOUT_H};
+	int ret =  driver_i2c_transfer_blocking(IAM20680_ADR, txbuf, 1, (uint8_t *)rxbuf, sizeof(Iam20680ht_data));
+	if (ret != 0) return ret;
+
+	for (size_t i=0 ; i<sizeof(Iam20680ht_data)/sizeof(uint16_t) ; ++i) {
+		rxbuf->arr[i] = (rxbuf->arr[i] << 8) | (rxbuf->arr[i] >> 8);
+	}
+
 }
 
 /*---------------------------------------------------------------------------*/
 int iam20680ht_on_int(void)
 {
+	uint8_t txbuf[1] = {IAM20680HT_ACCEL_XOUT_H};
 	if (sInhibit) {
 		return -1;
 	}
 
-	_checkDataReadyAndRead();
-	
-	return 0;
-}
-
-
-/*---------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
-static void _checkDataReadyAndRead(void)
-{
-	int ret = 0;
-
 	sInhibit    = 1;
-	sAccelReady = 0;
-	sGyroReady  = 0;
+	(void) driver_i2c_transfer(IAM20680_ADR, txbuf, sizeof(txbuf), &sRxBuf, sizeof(Iam20680ht_data), _capture_done_cb);
 
-	//J Odometerを使用する場合には、ここでデータ読み込みのKickを行う
-	if (aiMini4wdOdometerEnabled()) {
-		ret = odometer_grab();
-	}
-	
-	sTxbuf[0] = IAM20680HT_ACCEL_XOUT_H;
-	ret = -1;
-
-	while ((ret != 0) && (ret != AI_ERROR_I2C_BUSY)) {
-		ret = samd51_i2c_txrx(SAMD51_SERCOM3, IAM20680_ADR, sTxbuf, 1, sRxBuf.bytes, 14, _capture_done_cb);
-	}
-
-	return;
+	return 0;
 }
 
 /*---------------------------------------------------------------------------*/
 static void _capture_done_cb(int status)
 {
-	if (status == AI_OK) {
-		//J Odometerを使用している場合、データが読み込まれるのを待つ
-		if (aiMini4wdOdometerEnabled() && !(odometer_is_busy())) {
-			aiMini4wdUpdateOdometerData(odometer_get_latest_data());
+	if (status == E_OK) {
+		// Convert Endian
+		for (size_t i=0 ; i<sizeof(Iam20680ht_data)/sizeof(uint16_t) ; ++i) {
+			sRxBuf.arr[i] = (sRxBuf.arr[i] << 8) | (sRxBuf.arr[i] >> 8);
 		}
-
-		sRxBuf.imu_us.accel[0] = ((sRxBuf.imu_us.accel[0] << 8) & 0xff00) | ((sRxBuf.imu_us.accel[0] >> 8) & 0x00ff);
-		sRxBuf.imu_us.accel[1] = ((sRxBuf.imu_us.accel[1] << 8) & 0xff00) | ((sRxBuf.imu_us.accel[1] >> 8) & 0x00ff);
-		sRxBuf.imu_us.accel[2] = ((sRxBuf.imu_us.accel[2] << 8) & 0xff00) | ((sRxBuf.imu_us.accel[2] >> 8) & 0x00ff);
-
-		sRxBuf.imu_us.gyro[0] = ((sRxBuf.imu_us.gyro[0] << 8) & 0xff00) | ((sRxBuf.imu_us.gyro[0] >> 8) & 0x00ff);
-		sRxBuf.imu_us.gyro[1] = ((sRxBuf.imu_us.gyro[1] << 8) & 0xff00) | ((sRxBuf.imu_us.gyro[1] >> 8) & 0x00ff);
-		sRxBuf.imu_us.gyro[2] = ((sRxBuf.imu_us.gyro[2] << 8) & 0xff00) | ((sRxBuf.imu_us.gyro[2] >> 8) & 0x00ff);
-
-		// Keep compatibility 
-		uint16_t swap=sRxBuf.imu_us.gyro[0];
-		sRxBuf.imu_us.gyro[0]=sRxBuf.imu_us.gyro[1];
-		sRxBuf.imu_us.gyro[1]=swap;
-
-		swap=sRxBuf.imu_us.accel[0];
-		sRxBuf.imu_us.accel[0]=sRxBuf.imu_us.accel[1];
-		sRxBuf.imu_us.accel[1]=swap;
-
-
-		aiMini4wdUpdateSensorData(&sRxBuf);
+		if (_cb) _cb(&sRxBuf);
 	}
 
 	sInhibit = 0;

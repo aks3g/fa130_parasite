@@ -13,7 +13,13 @@
 
 #include "app/env.h"
 #include "app/console.h"
-#include "app/ad_collector.h" 
+#include "app/ad_collector.h"
+#include "app/sensor.h"
+#include "app/app_manager.h"
+
+#include "fs/fs.h"
+#include "driver/iam20680ht.h"
+#include "driver/i2c.h"
 
 typedef void (*test_func)(void);
 
@@ -47,6 +53,9 @@ void main_task(intptr_t exinf)
 
 	act_tsk(FS_TASK);
 
+	driver_i2c_init();
+	act_tsk(SENSOR_TASK);
+
 	while(1) {
 		dly_tsk(5);
 	}
@@ -67,10 +76,20 @@ void fs_task(intptr_t exinf)
 
 void sensor_task(intptr_t exinf)
 {
+	SensorValue val;
+	int ret = appManager_init();
+	console_printf("Activated: App Manager. %d\n", ret);
+	if (ret) while(1);
 
-	while(1) {
-		dly_tsk(100);
-	}
+	ret = sensor_probe();
+	console_printf("Activated: Sensors. %d\n", ret);
+	if (ret) while(1);
+
+	App app = appManagerGetCurrentApp();
+	if (app) app();
+
+	// if no application, exit this task;
+	return;
 }
 
 void signal_proc_task(intptr_t exinf)

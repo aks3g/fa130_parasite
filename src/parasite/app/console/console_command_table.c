@@ -16,6 +16,11 @@
 ConsoleCmdItem consoleCmdSet[] =
 {
 	{
+		.func = consoleFuncSensor,
+		.help = consoleHelpSensor,
+		.name = "sensor",
+	},
+	{
 		.func = consoleFuncCapture,
 		.help = consoleHelpCapture,
 		.name = "capture",

@@ -159,6 +159,8 @@ LDFLAGS := $(LDFLAGS) -L$(CMSIS_DIR)/CMSIS/Lib/GCC
 CFG1_OUT_LDFLAGS := $(CFG1_OUT_LDFLAGS) 
 LIBS := $(LIBS) $(CXXLIBS) -larm_cortexM4lf_math
 CFLAGS = $(COPTS) $(CDEFS) $(INCLUDES)
+DEPFLAGS = -MMD -MP -MF $(@:.o=.d) -MT $@
+
 
 #
 #  アプリケーションプログラムに関する定義
@@ -188,9 +190,17 @@ vpath %.c fs
 FS_SRCS := $(wildcard fs/*.c)
 APPL_COBJS  += $(notdir $(FS_SRCS:.c=.o))
 
+vpath %.c app/app_manager
+APPMGR_SRCS := $(wildcard app/app_manager/*.c)
+APPL_COBJS  += $(notdir $(APPMGR_SRCS:.c=.o))
+
 vpath %.c app/console
 CONSOLE_SRCS := $(wildcard app/console/*.c)
 APPL_COBJS  += $(notdir $(CONSOLE_SRCS:.c=.o))
+
+vpath %.c app/sensor
+SENSOR_SRCS := $(wildcard app/sensor/*.c)
+APPL_COBJS  += $(notdir $(SENSOR_SRCS:.c=.o))
 
 vpath %.c app/ad_collector
 AD_SRCS := $(wildcard app/ad_collector/*.c)
@@ -393,7 +403,7 @@ $(OBJNAME).srec: $(OBJFILE)
 #
 .PHONY: clean
 clean:
-	rm -f \#* *~ *.o $(CLEAN_FILES)
+	rm -f \#* *~ *.o *.d $(CLEAN_FILES)
 	rm -f $(OBJFILE) $(OBJNAME).syms $(OBJNAME).srec $(OBJNAME).bin
 	rm -f kernel_cfg.timestamp $(CFG2_OUT_SRCS)
 	rm -f cfg1_out.c $(CFG1_OUT) cfg1_out.syms cfg1_out.srec
@@ -481,6 +491,13 @@ endif
 #
 #  依存関係ファイルをインクルード
 #
+DEPFILES = $(ALL_CFG_COBJS:.o=.d) \
+           $(KERNEL_AUX_COBJS:.o=.d) $(KERNEL_ASMOBJS:.o=.d) \
+           $(KERNEL_COBJS:.o=.d) $(KERNEL_LCSRCS:.c=.d) \
+           $(SYSSVC_COBJS:.o=.d) $(SYSSVC_ASMOBJS:.o=.d) \
+           $(APPL_COBJS:.o=.d) $(APPL_CXXOBJS:.o=.d) $(APPL_ASMOBJS:.o=.d)
+
+-include $(DEPFILES)
 -include Makefile.depend
 
 #
@@ -518,10 +535,10 @@ endif
 KERNEL_ALL_COBJS = $(KERNEL_COBJS) $(KERNEL_AUX_COBJS)
 
 $(KERNEL_ALL_COBJS): %.o: %.c
-	$(CC) -c $(CFLAGS) $(KERNEL_CFLAGS) $<
+	$(CC) -c $(CFLAGS) $(KERNEL_CFLAGS) $(DEPFLAGS) $<
 
 $(KERNEL_ALL_COBJS:.o=.s): %.s: %.c
-	$(CC) -S $(CFLAGS) $(KERNEL_CFLAGS) $<
+	$(CC) -S $(CFLAGS) $(KERNEL_CFLAGS) $(DEPFLAGS) $<
 
 $(KERNEL_LCOBJS): %.o:
 	$(CC) -DTOPPERS_$(*F) -o $@ -c $(CFLAGS) $(KERNEL_CFLAGS) $<
@@ -530,31 +547,31 @@ $(KERNEL_LCOBJS:.o=.s): %.s:
 	$(CC) -DTOPPERS_$(*F) -o $@ -S $(CFLAGS) $(KERNEL_CFLAGS) $<
 
 $(KERNEL_ASMOBJS): %.o: %.S
-	$(CC) -c $(CFLAGS) $(KERNEL_CFLAGS) $<
+	$(CC) -c $(CFLAGS) $(KERNEL_CFLAGS) $(DEPFLAGS) $<
 
 $(SYSSVC_COBJS): %.o: %.c
-	$(CC) -c $(CFLAGS) $(SYSSVC_CFLAGS) $<
+	$(CC) -c $(CFLAGS) $(SYSSVC_CFLAGS) $(DEPFLAGS) $<
 
 $(SYSSVC_COBJS:.o=.s): %.s: %.c
-	$(CC) -S $(CFLAGS) $(SYSSVC_CFLAGS) $<
+	$(CC) -S $(CFLAGS) $(SYSSVC_CFLAGS) $(DEPFLAGS) $<
 
 $(SYSSVC_ASMOBJS): %.o: %.S
-	$(CC) -c $(CFLAGS) $(SYSSVC_CFLAGS) $<
+	$(CC) -c $(CFLAGS) $(SYSSVC_CFLAGS) $(DEPFLAGS) $<
 
 $(APPL_COBJS): %.o: %.c
-	$(CC) -c $(CFLAGS) $(APPL_CFLAGS) $<
+	$(CC) -c $(CFLAGS) $(APPL_CFLAGS) $(DEPFLAGS) $<
 
 $(APPL_COBJS:.o=.s): %.s: %.c
-	$(CC) -S $(CFLAGS) $(APPL_CFLAGS) $<
+	$(CC) -S $(CFLAGS) $(APPL_CFLAGS) $(DEPFLAGS) $<
 
 $(APPL_CXXOBJS): %.o: %.cpp
-	$(CXX) -c $(CFLAGS) $(APPL_CFLAGS) $<
+	$(CXX) -c $(CFLAGS) $(APPL_CFLAGS) $(DEPFLAGS) $<
 
 $(APPL_CXXOBJS:.o=.s): %.s: %.cpp
-	$(CXX) -S $(CFLAGS) $(APPL_CFLAGS) $<
+	$(CXX) -S $(CFLAGS) $(APPL_CFLAGS) $(DEPFLAGS) $<
 
 $(APPL_ASMOBJS): %.o: %.S
-	$(CC) -c $(CFLAGS) $(APPL_CFLAGS) $<
+	$(CC) -c $(CFLAGS) $(APPL_CFLAGS) $(DEPFLAGS) $<
 
 #
 #  依存関係作成ルールの定義
