@@ -96,7 +96,7 @@ int fs_read(FsFile *f, uint8_t *buf, const size_t size)
 	//J 今の作業領域に乗っている部分はコピーしてしまう
 	if ( ((size_t)f->ptr & (SFLASH_PAGE_SIZE - 1)) != 0) {
 		size_t fragment = SFLASH_PAGE_SIZE - (size_t)f->ptr & (SFLASH_PAGE_SIZE - 1);
-		size_t copy_size = framgnet > remaining ? remaining : fragment;
+		size_t copy_size = fragment > remaining ? remaining : fragment;
 		if (copy_size) {
 			memcpy(buf, &f->work[4+(size_t)f->ptr & (SFLASH_PAGE_SIZE - 1)], copy_size);
 			remaining -= copy_size;

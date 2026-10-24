@@ -71,16 +71,21 @@ App appManagerGetCurrentApp(void)
 }
 
 //-----------------------------------------------------------------------------
-static uint8_t sFsBuf[3][256];
+static uint8_t sFsBuf[2][SFLASH_PAGE_SIZE];
 
 void _default_app(void)
 {
 	int ret = 0;
 	int wptr = 0;
 	int i = 0;
+	int count = 0;
 	SensorValue val;
 
+	FsFile * f = io_scheduler_open(fs_file_l_0); //TODO
+
 	memset(sFsBuf, 0xFF, sizeof(sFsBuf));
+
+	console_printf("start default app\n");
 
 	while (1) {
 		(void)sensor_grab(&val);
@@ -89,14 +94,21 @@ void _default_app(void)
 		memcpy(&(sFsBuf[i][wptr]), &val, sizeof(SensorValue));
 		wptr += 32;
 		if (wptr == SFLASH_PAGE_SIZE) {
-			ret = io_scheduler_write_req(sFsBuf[i]);
+			console_printf("Flush to FS\n");
+
+			ret = io_scheduler_write_req(f, sFsBuf[i], SFLASH_PAGE_SIZE);
 			if (ret != E_OK) {
 			}
 
 			wptr = 0;
 			i = 1-i;
 		}
+
+		count++;
+		if (count > 50 * 10) break;
 	}
+
+	sus_tsk(TSK_SELF);
 }
 
 void _mapping_app(void)

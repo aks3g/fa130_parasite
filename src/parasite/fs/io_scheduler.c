@@ -15,7 +15,7 @@
 #include "fs/io_scheduler.h"
 
 #pragma pack(1)
-typedf struct {
+typedef struct {
 	uint32_t req;
 	FsFile   *fil;
 	void     *buf;
@@ -23,38 +23,77 @@ typedf struct {
 } IoRequest;
 #pragma pack()
 
-#define IO_SCHEDULER_DONE_FLG			(0x1 << 0)
+#define IO_SCHEDULER_DONE_FLG					(0x1 << 0)
+#define IO_SCHEDULER_ALIGNE_ERROR_FLG			(0x1 << 1)
+#define IO_SCHEDULER_IO_ERROR_FLG				(0x1 << 2)
+
+typedef enum {
+	IO_SCHEDULER_WRITE_REQ,
+	IO_SCHEDULER_BLOCK_WRITE_REQ,
+	IO_SCHEDULER_READ,
+	IO_SCHEDULER_BLOCK_READ,
+	IO_SCHEDULER_WRITE,
+	IO_SCHEDULER_BLOCK_WRITE,
+} IoSchedulerRequest;
 
 int io_scheduler_task(void)
 {
-	IoRequest io_req;
+	IoRequest *io_req;
 	
 	while (1) {
-		int ret = rcv_mbf(FS_MBF, &io_req);
+		int ret = rcv_dtq(FS_IO_DTQ, (intptr_t *)&io_req);
 		if (ret != E_OK) continue;
 
-		switch (io_req.req){
-		case IO_SCHEDULER_WRIET:
-			
+		switch (io_req->req){
+		case IO_SCHEDULER_WRITE_REQ:
+			(void)fs_write(io_req->fil, io_req->buf, io_req->len);
 			break;
-		case IO_SCHEDULER_READ_BLOCKING:
-			fs_read_page()
+		case IO_SCHEDULER_BLOCK_WRITE_REQ:
+			if( (io_req->len % SFLASH_PAGE_SIZE) != 0 ) break;
+			(void)fs_write_page(io_req->fil, io_req->buf, (io_req->len/SFLASH_PAGE_SIZE));
+			break;
+
+		case IO_SCHEDULER_READ:
+			fs_read(io_req->fil, io_req->buf, io_req->len);
 			set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG);
 			break;
-		case IO_SCHEDULER_WRIET_BLOCKING:
+		case IO_SCHEDULER_BLOCK_READ:
+			if( (io_req->len % SFLASH_PAGE_SIZE) != 0 ) {
+				set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_ALIGNE_ERROR_FLG);
+			}
+			else {
+				int ret = fs_read_page(io_req->fil, io_req->buf, io_req->len);
+				if (ret == E_OK) set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG);
+				else             set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_IO_ERROR_FLG);
+			}
+			break;
+
+		case IO_SCHEDULER_WRITE:
+			fs_write(io_req->fil, io_req->buf, io_req->len);
 			set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG);
 			break;
+		case IO_SCHEDULER_BLOCK_WRITE:
+			if( (io_req->len % SFLASH_PAGE_SIZE) != 0 ) {
+				set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_ALIGNE_ERROR_FLG);
+			}
+			else {
+				int ret = fs_write_page(io_req->fil, io_req->buf, io_req->len);
+				if (ret == E_OK) set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG);
+				else             set_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_IO_ERROR_FLG);
+			}
+			break;
+
 		default:
+			break;
 		}
 	}
 }
-
 
 static FsFile _file[2] = 
 {
 	{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, {0}},
 	{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, {0}},
-}
+};
 
 FsFile *io_scheduler_open(fs_file_idx index)
 {
@@ -78,36 +117,81 @@ FsFile *io_scheduler_open(fs_file_idx index)
 	return f;
 }
 
+// 本当はLock取るべき．将来的にMulti Thread safeにしないとダメ
 int io_scheduler_write_req(FsFile *f, const uint8_t *buf, size_t length)
 {
-	IoRequest io_req;
-	io_req.req = IO_SCHEDULER_WRITE;
+	static IoRequest io_req;
+	io_req.req = IO_SCHEDULER_WRITE_REQ;
 	io_req.buf = (void *)buf;
 	io_req.fil = f;
 	io_req.len = length;
 
-	int ret = snd_mbf(FS_MBF, &io_req, sizeof(io_req));
+	int ret = snd_dtq(FS_IO_DTQ, (intptr_t)&io_req);
 	if (ret != E_OK) return ret;
 
 	return E_OK;
 }
 
+// 本当はLock取るべき
+int io_scheduler_block_write_req(FsFile *f, const uint8_t *buf, size_t length)
+{
+	static IoRequest io_req;
+	io_req.req = IO_SCHEDULER_BLOCK_WRITE_REQ;
+	io_req.buf = (void *)buf;
+	io_req.fil = f;
+	io_req.len = length;
 
-int io_scheduler_read_blocking(FsFile *f, uint8_t *buf, size_t length)
+	int ret = snd_dtq(FS_IO_DTQ, (intptr_t)&io_req);
+	if (ret != E_OK) return ret;
+
+	return E_OK;
+}
+
+int io_scheduler_read(FsFile *f, uint8_t *buf, size_t length)
 {
 	IoRequest io_req;
 	io_req.req = IO_SCHEDULER_READ;
 	io_req.buf = (void *)buf;
 	io_req.len = length;
 
-	int ret = snd_mbf(FS_MBF, &io_req, sizeof(io_req));
+	int ret = snd_dtq(FS_IO_DTQ, (intptr_t)&io_req);
 	if (ret != E_OK) return ret;
 
-	FLG_PTN flag;
-	return twai_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG, TWF_ORW, &flg, 100);
+	FLGPTN flag;
+	ret = twai_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG, TWF_ORW, &flag, 100);
+	if (ret != E_OK) return ret;
+	if (flag & IO_SCHEDULER_ALIGNE_ERROR_FLG) {
+		return E_ALIGN;
+	}
+	else if (flag & IO_SCHEDULER_IO_ERROR_FLG) {
+		return E_IO;
+	}
+	return E_OK;
 }
 
-int io_scheduler_write_blocking(FsFile *f, const uint8_t *buf, size_t length)
+int io_scheduler_block_read(FsFile *f, uint8_t *buf, size_t length)
+{
+	IoRequest io_req;
+	io_req.req = IO_SCHEDULER_BLOCK_READ;
+	io_req.buf = (void *)buf;
+	io_req.len = length;
+
+	int ret = snd_dtq(FS_IO_DTQ, (intptr_t)&io_req);
+	if (ret != E_OK) return ret;
+
+	FLGPTN flag;
+	ret = twai_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG, TWF_ORW, &flag, 100);
+	if (ret != E_OK) return ret;
+	if (flag & IO_SCHEDULER_ALIGNE_ERROR_FLG) {
+		return E_ALIGN;
+	}
+	else if (flag & IO_SCHEDULER_IO_ERROR_FLG) {
+		return E_IO;
+	}
+	return E_OK;
+}
+
+int io_scheduler_write(FsFile *f, const uint8_t *buf, size_t length)
 {
 	IoRequest io_req;
 	io_req.req = IO_SCHEDULER_WRITE;
@@ -115,9 +199,41 @@ int io_scheduler_write_blocking(FsFile *f, const uint8_t *buf, size_t length)
 	io_req.fil = f;
 	io_req.len = length;
 
-	int ret = snd_mbf(FS_MBF, &io_req, sizeof(io_req));
+	int ret = snd_dtq(FS_IO_DTQ, (intptr_t)&io_req);
 	if (ret != E_OK) return ret;
 
-	FLG_PTN flag;
-	return twai_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG, TWF_ORW, &flg, 100);
+	FLGPTN flag;
+	ret = twai_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG, TWF_ORW, &flag, 100);
+	if (ret != E_OK) return ret;
+	if (flag & IO_SCHEDULER_ALIGNE_ERROR_FLG) {
+		return E_ALIGN;
+	}
+	else if (flag & IO_SCHEDULER_IO_ERROR_FLG) {
+		return E_IO;
+	}
+	return E_OK;
 }
+
+int io_scheduler_block_write(FsFile *f, const uint8_t *buf, size_t length)
+{
+	IoRequest io_req;
+	io_req.req = IO_SCHEDULER_BLOCK_WRITE;
+	io_req.buf = (void *)buf;
+	io_req.fil = f;
+	io_req.len = length;
+
+	int ret = snd_dtq(FS_IO_DTQ, (intptr_t)&io_req);
+	if (ret != E_OK) return ret;
+
+	FLGPTN flag;
+	ret = twai_flg(IO_SCHEDULER_FLG, IO_SCHEDULER_DONE_FLG, TWF_ORW, &flag, 100);
+	if (ret != E_OK) return ret;
+	if (flag & IO_SCHEDULER_ALIGNE_ERROR_FLG) {
+		return E_ALIGN;
+	}
+	else if (flag & IO_SCHEDULER_IO_ERROR_FLG) {
+		return E_IO;
+	}
+	return E_OK;
+}
+
